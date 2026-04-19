@@ -68,7 +68,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TubeScraper Report</title>
+<title>Find-Your-Tubers</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -102,13 +102,24 @@ body {
     align-items: center;
     gap: 8px 16px;
 }
+#header-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 0;
+    white-space: nowrap;
+}
 #header-title {
     font-size: 14px;
     font-weight: 600;
     color: #aaa;
-    white-space: nowrap;
-    padding: 8px 0;
 }
+#header-byline {
+    font-size: 11px;
+    color: #3a3a4a;
+    text-decoration: none;
+}
+#header-byline:hover { color: #555; }
 #header-date {
     font-size: 12px;
     color: #555;
@@ -173,12 +184,22 @@ body {
     color: #9bc8ff;
 }
 
-/* tag pill group — wraps onto multiple lines */
-#tag-filter-group {
+/* terms popup */
+#popup-terms {
+    position: fixed;
+    display: none;
+    z-index: 999;
+    background: #12121e;
+    border: 1px solid #3a3a50;
+    border-radius: 7px;
+    box-shadow: 0 10px 40px #0009;
+    padding: 10px 12px;
+    max-width: 480px;
+}
+#popup-terms-inner {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    max-width: 520px;
+    gap: 5px;
 }
 
 /* starred-only toggle */
@@ -401,32 +422,33 @@ tr.filtered-out { display: none !important; }
 <body>
 
 <div id="header">
-  <span id="header-title">TubeScraper — <span id="channel-count"></span> channels</span>
+  <div id="header-brand">
+    <span id="header-title">Find-Your-Tubers: <span id="channel-count"></span> channels</span>
+    <a id="header-byline" href="https://tau.games" target="_blank" rel="noopener">with &lt;3 from tau.games</a>
+  </div>
   <span id="header-date"></span>
   <div id="filters">
     <div class="filter-group">
       <span class="filter-label">Subs</span>
-      <input class="filter-input" id="f-subs-min" type="number" min="0" placeholder="min" title="Min subscribers">
+      <input class="filter-input" id="f-subs-min" type="text" placeholder="min" title="Min subscribers (e.g. 5k, 1m)">
       <span class="filter-label">–</span>
-      <input class="filter-input" id="f-subs-max" type="number" min="0" placeholder="max" title="Max subscribers">
+      <input class="filter-input" id="f-subs-max" type="text" placeholder="max" title="Max subscribers (e.g. 200k)">
     </div>
     <div class="filter-group">
       <span class="filter-label">Views</span>
-      <input class="filter-input" id="f-views-min" type="number" min="0" placeholder="min" title="Min median views">
+      <input class="filter-input" id="f-views-min" type="text" placeholder="min" title="Min median views (e.g. 5k)">
       <span class="filter-label">–</span>
-      <input class="filter-input" id="f-views-max" type="number" min="0" placeholder="max" title="Max median views">
+      <input class="filter-input" id="f-views-max" type="text" placeholder="max" title="Max median views (e.g. 200k)">
     </div>
     <div class="filter-group">
       <span class="filter-label">Min terms</span>
       <input class="filter-input wide" id="f-min-terms" type="number" min="1" placeholder="1" title="Minimum matched terms">
     </div>
-    <div class="filter-group" id="tag-filter-group">
-      <!-- tag pills injected by JS -->
-    </div>
     <button id="btn-starred">⭐ Starred</button>
     <button id="btn-export">↓ Export starred</button>
   </div>
 </div>
+<div id="popup-terms"><div id="popup-terms-inner"></div></div>
 
 <div id="wrap">
 <table id="tbl">
@@ -436,7 +458,7 @@ tr.filtered-out { display: none !important; }
     <th class="col-name"  data-col="name">Channel</th>
     <th class="col-subs"  data-col="subscribers">Subs</th>
     <th class="col-med"   data-col="median_views" title="Median views across recent videos">Views</th>
-    <th class="col-terms" data-col="terms">Terms</th>
+    <th class="col-terms" id="th-terms" title="Click to filter by term">Terms ▾</th>
     <th class="col-last"  data-col="last_post">Last post</th>
   </tr>
 </thead>
@@ -510,11 +532,22 @@ const starred = new Set();
 let filterStarredOnly = false;
 let activeTags = new Set(); // empty = all pass
 
+function parseNum(val) {
+    const s = (val || '').trim().toLowerCase();
+    if (!s) return null;
+    const m = s.match(/^([\d.]+)\s*([km]?)$/);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    if (m[2] === 'k') return Math.round(n * 1_000);
+    if (m[2] === 'm') return Math.round(n * 1_000_000);
+    return Math.round(n);
+}
+
 function getFilterValues() {
-    const subsMin  = parseInt(document.getElementById('f-subs-min').value)  || 0;
-    const subsMax  = parseInt(document.getElementById('f-subs-max').value)  || Infinity;
-    const viewsMin = parseInt(document.getElementById('f-views-min').value) || 0;
-    const viewsMax = parseInt(document.getElementById('f-views-max').value) || Infinity;
+    const subsMin  = parseNum(document.getElementById('f-subs-min').value)  ?? 0;
+    const subsMax  = parseNum(document.getElementById('f-subs-max').value)  ?? Infinity;
+    const viewsMin = parseNum(document.getElementById('f-views-min').value) ?? 0;
+    const viewsMax = parseNum(document.getElementById('f-views-max').value) ?? Infinity;
     const minTerms = parseInt(document.getElementById('f-min-terms').value) || 1;
     return { subsMin, subsMax, viewsMin, viewsMax, minTerms };
 }
@@ -635,25 +668,64 @@ function placePopup(popup, anchorEl) {
     popup.style.top  = y + 'px';
 }
 
-// ── Tag filter pills setup ──
+// ── Tag filter popup ──
+let termsPopupOpen = false;
+
 function buildTagPills() {
     const allTerms = new Set();
     DATA.channels.forEach(ch => ch.search_terms.forEach(t => allTerms.add(t)));
-    const container = document.getElementById('tag-filter-group');
-    if (allTerms.size === 0) { container.style.display = 'none'; return; }
-    container.innerHTML = '';
+    const inner = document.getElementById('popup-terms-inner');
+    inner.innerHTML = '';
     for (const term of [...allTerms].sort()) {
         const pill = document.createElement('label');
         pill.className = 'tag-pill';
         pill.title = term;
         pill.innerHTML = `<input type="checkbox"><span>${escHtml(term)}</span>`;
-        pill.querySelector('input').addEventListener('change', e => {
+        const cb = pill.querySelector('input');
+        if (activeTags.has(term)) { cb.checked = true; pill.classList.add('active'); }
+        cb.addEventListener('change', e => {
             if (e.target.checked) activeTags.add(term);
             else activeTags.delete(term);
             pill.classList.toggle('active', e.target.checked);
+            updateThTermsIndicator();
             applyFilters();
         });
-        container.appendChild(pill);
+        inner.appendChild(pill);
+    }
+}
+
+function updateThTermsIndicator() {
+    const th = document.getElementById('th-terms');
+    if (activeTags.size > 0) {
+        th.style.color = '#9bc8ff';
+        th.textContent = `Terms ▾ (${activeTags.size})`;
+    } else {
+        th.style.color = '';
+        th.textContent = 'Terms ▾';
+    }
+}
+
+function placeTermsPopup() {
+    const th = document.getElementById('th-terms');
+    const pp = document.getElementById('popup-terms');
+    const r = th.getBoundingClientRect();
+    pp.style.display = 'block';
+    const pw = pp.offsetWidth;
+    let x = r.left;
+    if (x + pw > window.innerWidth - 8) x = window.innerWidth - pw - 8;
+    pp.style.left = x + 'px';
+    pp.style.top  = (r.bottom + 4) + 'px';
+}
+
+function toggleTermsPopup(e) {
+    e.stopPropagation();
+    const pp = document.getElementById('popup-terms');
+    termsPopupOpen = !termsPopupOpen;
+    if (termsPopupOpen) {
+        buildTagPills();
+        placeTermsPopup();
+    } else {
+        pp.style.display = 'none';
     }
 }
 
@@ -797,7 +869,17 @@ function syncHeaderHeight() {
 // ── Init ──
 document.getElementById('header-date').textContent = DATA.today;
 
-buildTagPills();
+document.getElementById('th-terms').addEventListener('click', toggleTermsPopup);
+
+// close terms popup when clicking outside
+document.addEventListener('click', e => {
+    if (!termsPopupOpen) return;
+    const pp = document.getElementById('popup-terms');
+    if (!pp.contains(e.target) && e.target.id !== 'th-terms') {
+        pp.style.display = 'none';
+        termsPopupOpen = false;
+    }
+});
 
 ['f-subs-min','f-subs-max','f-views-min','f-views-max','f-min-terms'].forEach(id => {
     document.getElementById(id).addEventListener('input', applyFilters);
