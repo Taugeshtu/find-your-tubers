@@ -41,6 +41,8 @@ tool2_aggregate.py  →  channels.json                       (deduplicated, with
       ▼
 tool3_profile.py    →  profiles.json                       (channel stats + recent video activity)
       │
+      ├──▶ filter.py  →  (stdout / filtered.csv)           (optional: ranked shortlist before report)
+      │
       ▼
 tool4_report.py     →  report.html                         (interactive dashboard, open in browser)
 ```
@@ -149,6 +151,25 @@ python tool3_profile.py --channels channels.json --videos 100 --out profiles.jso
   }
 }
 ```
+
+---
+
+## filter.py — Ranked shortlist (optional pre-report step)
+
+Reads `profiles.json`, applies numeric filters, and prints a ranked table to stdout. Useful for quickly culling a large channel list before opening the full report, or for piping into a CSV.
+
+```bash
+python filter.py --profiles profiles.json --min-terms 2 --min-views 5000 --max-views 200000 --csv filtered.csv
+```
+
+**Arguments:**
+- `--profiles` — path to tool3 output
+- `--min-terms` — minimum matched search terms (default: 2)
+- `--min-views` — minimum median view count on recent videos
+- `--max-views` — maximum median view count (filter out giants)
+- `--csv` — optional CSV export path
+
+**Output columns:** Channel name, URL, subscribers, seed terms matched, median views, last post date, about snippet. Sorted by terms matched descending, then median views descending.
 
 ---
 

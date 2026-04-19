@@ -173,6 +173,14 @@ body {
     color: #9bc8ff;
 }
 
+/* tag pill group — wraps onto multiple lines */
+#tag-filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 520px;
+}
+
 /* starred-only toggle */
 #btn-starred {
     background: #1e1e2e;
