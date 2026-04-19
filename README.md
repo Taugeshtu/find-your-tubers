@@ -1,12 +1,31 @@
-# TubeScraper
+# FindYourTubers
 
 Find YouTube channels that cover games like yours — filter by consistency, viewership, and topic overlap. Built for indie game devs doing outreach.
 
 ## Setup
 
-1. Get a YouTube Data API v3 key from [Google Cloud Console](https://console.cloud.google.com/) (free tier: 10,000 units/day)
-2. Paste the key into `api.key` (one line, no quotes)
-3. `pip install google-api-python-client`
+### 1. Get a YouTube Data API v3 key
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and sign in with your Google account.
+2. Create a new project (top-left dropdown → "New Project"). Name it anything — e.g. `find-your-tubers`.
+3. In the left sidebar, go to **APIs & Services → Library**.
+4. Search for **"YouTube Data API v3"** and click Enable.
+5. Go to **APIs & Services → Credentials**.
+6. Click **"+ Create Credentials" → API key**. Copy the key shown.
+7. (Optional but recommended) Click "Edit API key" → under "API restrictions", select "Restrict key" → pick "YouTube Data API v3". This limits blast radius if the key leaks.
+8. Paste the key into a file called `api.key` next to these scripts (one line, no quotes, no spaces).
+
+Free tier gives you **10,000 quota units per day**. This tool's typical full run costs ~4,500 units (see Quota section below).
+
+### 2. Install the Python dependency
+
+```bash
+pip install google-api-python-client
+```
+
+Python 3.10+ required.
+
+---
 
 ## The Pipeline
 
@@ -23,7 +42,7 @@ tool2_aggregate.py  →  channels.json                       (deduplicated, with
 tool3_profile.py    →  profiles.json                       (channel stats + recent video activity)
       │
       ▼
-tool4_filter.py     →  (stdout / filtered.csv)             (ranked shortlist for outreach)
+tool4_report.py     →  report.html                         (interactive dashboard, open in browser)
 ```
 
 ---
@@ -40,6 +59,14 @@ python tool1_search.py --terms search_terms.txt --results 200 --output output/
 - `--terms` — path to search terms file
 - `--results` — how many search results to fetch per term (default: 200; costs ~2 quota units per page of 50)
 - `--output` — folder to write results into (created if missing)
+
+**Search terms file format** — one phrase per line, written exactly as you'd type it into YouTube:
+
+```
+dome keeper gameplay
+geodepths let's play
+mining incremental idle game
+```
 
 **Output file:** `output/YYYYMMDD-HH.MM-<sanitized-term>.json`
 
@@ -62,7 +89,7 @@ Each file is a list of channel hit objects:
 
 ## tool2_aggregate.py — Aggregate + deduplicate
 
-Reads all `tool1` output files from a folder (or a specific glob) and collapses them into one `channels.json`. Channels that appeared across multiple search terms or multiple runs get merged — the full list of terms and source files is preserved.
+Reads all `tool1` output files from a folder and collapses them into one `channels.json`. Channels that appeared across multiple search terms or multiple runs get merged — the full list of terms and source files is preserved.
 
 ```bash
 python tool2_aggregate.py --input output/ --out channels.json
@@ -92,7 +119,7 @@ python tool2_aggregate.py --input output/ --out channels.json
 
 ## tool3_profile.py — Pull channel profiles + recent activity
 
-Takes `channels.json` and enriches each channel with: subscriber count, creation date, about/description, and their last N videos (title, views, publish date). Rate-limited to stay within quota. Fine to run overnight.
+Takes `channels.json` and enriches each channel with subscriber count, creation date, about/description, and their last N videos (title, views, publish date). Rate-limited to stay within quota. Fine to run overnight.
 
 ```bash
 python tool3_profile.py --channels channels.json --videos 100 --out profiles.json
@@ -125,22 +152,39 @@ python tool3_profile.py --channels channels.json --videos 100 --out profiles.jso
 
 ---
 
-## tool4_filter.py — Ranked shortlist
+## tool4_report.py — Interactive HTML dashboard
 
-Reads `profiles.json`, applies filters and scoring, prints a ranked table (and optionally a CSV) ready for outreach. This is where you tune thresholds.
+Reads `profiles.json` and generates a self-contained `report.html`. Open it in any browser — no server needed.
 
 ```bash
-python tool4_filter.py --profiles profiles.json --min-terms 2 --min-views 5000 --max-views 200000 --csv filtered.csv
+python tool4_report.py --profiles profiles.json --out report.html
 ```
 
 **Arguments:**
 - `--profiles` — path to tool3 output
-- `--min-terms` — minimum number of seed search terms a channel must have appeared in (default: 2)
-- `--min-views` — minimum median view count on recent videos
-- `--max-views` — maximum median view count (to filter out giants)
-- `--csv` — optional CSV export path
+- `--out` — output file (default: `report.html`)
 
-**Output columns:** Channel name, URL, subscribers, seed terms matched, median views (recent), last post date, about snippet.
+**What the report shows:**
+- Sortable table: channel name, subscribers, median views, matched terms, last post date
+- Click any row to expand — see which search terms matched and which specific videos triggered the hit, with view-count colored links
+- Hover the channel name for the channel's About text
+- Hover the median views for a 90-day upload activity bar chart + recent video list sorted newest-first
+- View counts color-coded by rarity (gray → white → green → blue → purple → gold)
+- Dead channels (no post in 90 days) dimmed automatically
+
+**Filters in the header:**
+- Subscriber range (min / max)
+- Median views range (min / max)
+- Minimum matched terms count
+- Tag pills — click to require that term be matched
+- ⭐ Starred Only toggle
+
+**Export starred** — the "↓ Export starred" button downloads a `.md` file:
+```
+ChannelName: https://youtube.com/channel/UCxxxxx
+Subs: 48,200; median views: 22.0k
+Terms matched: dome keeper gameplay, geodepths let's play
+```
 
 ---
 
