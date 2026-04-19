@@ -7,6 +7,7 @@ Usage:
 
 import argparse
 import json
+import math
 import statistics
 from datetime import date
 from pathlib import Path
@@ -996,22 +997,52 @@ new ResizeObserver(syncHeaderHeight).observe(document.getElementById('header'));
 """
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate HTML report from profiles.json")
-    parser.add_argument("--profiles", default="profiles.json")
-    parser.add_argument("--out", default="report.html")
-    args = parser.parse_args()
-
-    channels = json.loads(Path(args.profiles).read_text())
-    blob = build_data_blob(channels)
-
-    html = HTML_TEMPLATE.replace(
+def make_html(blob: dict) -> str:
+    return HTML_TEMPLATE.replace(
         "/*DATA_PLACEHOLDER*/null/*END_DATA*/",
         json.dumps(blob, ensure_ascii=False)
     )
 
-    Path(args.out).write_text(html, encoding="utf-8")
-    print(f"Report → {args.out}  ({len(blob['channels'])} channels)")
+
+def chunk_list(lst: list, chunk_size: int) -> list[list]:
+    n = len(lst)
+    if n == 0:
+        return [lst]
+    num_chunks = max(1, math.ceil(n / chunk_size))
+    base, extra = divmod(n, num_chunks)
+    chunks, i = [], 0
+    for c in range(num_chunks):
+        size = base + (1 if c < extra else 0)
+        chunks.append(lst[i:i + size])
+        i += size
+    return chunks
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate HTML report from profiles.json")
+    parser.add_argument("--profiles", default="profiles.json")
+    parser.add_argument("--out", default="report.html")
+    parser.add_argument("--chunks", type=int, default=None,
+                        metavar="N", help="Split into chunks of ~N channels each")
+    args = parser.parse_args()
+
+    channels = json.loads(Path(args.profiles).read_text())
+    blob = build_data_blob(channels)
+    total = len(blob["channels"])
+
+    if args.chunks is None or total <= args.chunks:
+        Path(args.out).write_text(make_html(blob), encoding="utf-8")
+        print(f"Report → {args.out}  ({total} channels)")
+        return
+
+    out_path = Path(args.out)
+    stem, suffix = out_path.stem, out_path.suffix
+    parts = chunk_list(blob["channels"], args.chunks)
+    for i, part in enumerate(parts, 1):
+        chunk_blob = {**blob, "channels": part}
+        chunk_path = out_path.with_name(f"{stem}-{i}of{len(parts)}{suffix}")
+        chunk_path.write_text(make_html(chunk_blob), encoding="utf-8")
+        print(f"Report → {chunk_path}  ({len(part)} channels)")
 
 
 if __name__ == "__main__":

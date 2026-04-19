@@ -179,11 +179,16 @@ Reads `profiles.json` and generates a self-contained `report.html`. Open it in a
 
 ```bash
 python tool4_report.py --profiles profiles.json --out report.html
+
+# Split into chunks of ~N channels (evenly distributed)
+python tool4_report.py --profiles profiles.json --out report.html --chunks 200
+# → report-1of2.html, report-2of2.html, ...
 ```
 
 **Arguments:**
 - `--profiles` — path to tool3 output
 - `--out` — output file (default: `report.html`)
+- `--chunks N` — split output into files of ~N channels each, distributed evenly. If total ≤ N, writes a single file as normal.
 
 **What the report shows:**
 - Sortable table: channel name, subscribers, median views, matched terms, last post date
@@ -194,11 +199,15 @@ python tool4_report.py --profiles profiles.json --out report.html
 - Dead channels (no post in 90 days) dimmed automatically
 
 **Filters in the header:**
-- Subscriber range (min / max)
-- Median views range (min / max)
+- Subscriber range (min / max) — accepts `k`/`m` suffixes (e.g. `5k`, `1.5m`)
+- Median views range (min / max) — same
 - Minimum matched terms count
-- Tag pills — click to require that term be matched
+- Terms ▾ — click the column header to open a tag filter popup; require any specific term to be matched
 - ⭐ Starred Only toggle
+
+**Per-row actions:**
+- `★` — star a channel for export
+- `✕` — hide a channel; hidden channels collect in a collapsible tray at the bottom and can be un-hidden from there
 
 **Export starred** — the "↓ Export starred" button downloads a `.md` file:
 ```
