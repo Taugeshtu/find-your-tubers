@@ -266,6 +266,7 @@ thead th.sort-desc::after { content: " ▼"; }
 
 /* column widths */
 .col-star { width: 28px; text-align: center; }
+.col-hide { width: 24px; text-align: center; }
 .col-name { min-width: 160px; }
 .col-subs { width: 80px; text-align: right; }
 .col-med  { width: 90px;  text-align: right; }
@@ -338,6 +339,25 @@ tr.expanded .terms-collapsed { display: none; }
 .star { font-size: 15px; color: #333; cursor: pointer; transition: color 0.12s; }
 .star:hover { color: #888; }
 .star.on { color: #f5c518; }
+
+/* ── Hide button ── */
+.hide-btn { font-size: 12px; color: #333; cursor: pointer; transition: color 0.12s; line-height: 1; }
+.hide-btn:hover { color: #c04040; }
+
+/* ── Hidden tray at bottom ── */
+#hidden-tray-row { cursor: pointer; }
+#hidden-tray-row td {
+    padding: 6px 10px;
+    color: #444;
+    font-size: 12px;
+    border-top: 1px solid #222;
+    user-select: none;
+}
+#hidden-tray-row:hover td { color: #666; }
+#hidden-tray-body tr.channel-row { opacity: 0.45; }
+#hidden-tray-body tr.channel-row:hover { opacity: 0.7; background: #1a1a22; }
+.unhide-btn { font-size: 11px; color: #555; cursor: pointer; transition: color 0.12s; }
+.unhide-btn:hover { color: #5b9cf6; }
 
 /* ── Views cell trigger ── */
 .med-cell { cursor: pointer; border-bottom: 1px dashed #444; }
@@ -455,6 +475,7 @@ tr.filtered-out { display: none !important; }
 <thead>
   <tr>
     <th class="col-star">⭐</th>
+    <th class="col-hide"></th>
     <th class="col-name"  data-col="name">Channel</th>
     <th class="col-subs"  data-col="subscribers">Subs</th>
     <th class="col-med"   data-col="median_views" title="Median views across recent videos">Views</th>
@@ -463,6 +484,15 @@ tr.filtered-out { display: none !important; }
   </tr>
 </thead>
 <tbody id="tbody"></tbody>
+</table>
+
+<table id="tbl-hidden" style="width:100%;border-collapse:separate;border-spacing:0;margin-top:2px;display:none">
+  <tbody>
+    <tr id="hidden-tray-row">
+      <td colspan="7" id="hidden-tray-label">▶ Hidden (0)</td>
+    </tr>
+  </tbody>
+  <tbody id="hidden-tray-body" style="display:none"></tbody>
 </table>
 </div>
 
@@ -527,6 +557,7 @@ function sortedChannels() {
 }
 
 const starred = new Set();
+const hidden  = new Set();
 
 // ── Filter state ──
 let filterStarredOnly = false;
@@ -554,6 +585,7 @@ function getFilterValues() {
 
 function channelPasses(ch) {
     const { subsMin, subsMax, viewsMin, viewsMax, minTerms } = getFilterValues();
+    if (hidden.has(ch.id)) return false;
     if (filterStarredOnly && !starred.has(ch.id)) return false;
     const subs = ch.subscribers || 0;
     if (subs < subsMin || subs > subsMax) return false;
@@ -569,15 +601,59 @@ function channelPasses(ch) {
 
 function applyFilters() {
     let visible = 0;
-    document.querySelectorAll('tr.channel-row').forEach(tr => {
+    document.querySelectorAll('#tbody tr.channel-row').forEach(tr => {
         const ch = DATA.channels.find(c => c.id === tr.dataset.id);
         const pass = ch && channelPasses(ch);
         tr.classList.toggle('filtered-out', !pass);
-        const detail = document.querySelector(`tr.detail-row[data-id="${tr.dataset.id}"]`);
+        const detail = document.querySelector(`#tbody tr.detail-row[data-id="${tr.dataset.id}"]`);
         if (detail) detail.classList.toggle('filtered-out', !pass);
         if (pass) visible++;
     });
     document.getElementById('channel-count').textContent = visible;
+    renderHiddenTray();
+}
+
+function renderHiddenTray() {
+    const tbl = document.getElementById('tbl-hidden');
+    const trayBody = document.getElementById('hidden-tray-body');
+    const label = document.getElementById('hidden-tray-label');
+    const count = hidden.size;
+    if (count === 0) {
+        tbl.style.display = 'none';
+        trayBody.style.display = 'none';
+        trayBody.innerHTML = '';
+        return;
+    }
+    tbl.style.display = '';
+    const isOpen = trayBody.style.display !== 'none';
+    label.textContent = (isOpen ? '▼' : '▶') + ` Hidden (${count})`;
+    if (!isOpen) return;
+    trayBody.innerHTML = '';
+    const hiddenChannels = DATA.channels.filter(ch => hidden.has(ch.id));
+    for (const ch of hiddenChannels) {
+        const tr = document.createElement('tr');
+        tr.className = 'channel-row';
+        tr.dataset.id = ch.id;
+        tr.innerHTML = `
+          <td class="col-star"></td>
+          <td class="col-hide"><span class="unhide-btn" data-id="${ch.id}" title="Un-hide">↩</span></td>
+          <td class="col-name ch-name" data-id="${ch.id}">
+            <a href="${ch.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(ch.name)}</a>
+          </td>
+          <td class="col-subs ${vcClass(ch.subscribers)}">${fmtSubs(ch.subscribers)}</td>
+          <td class="col-med"><span class="${vcClass(ch.median_views)}">${fmtViews(ch.median_views)}</span></td>
+          <td class="col-terms"><span class="terms-collapsed">${escHtml(ch.search_terms.join('; '))}</span></td>
+          <td class="col-last">${ch.last_post || '—'}</td>
+        `;
+        trayBody.appendChild(tr);
+    }
+    trayBody.querySelectorAll('.unhide-btn').forEach(el => {
+        el.addEventListener('click', e => {
+            e.stopPropagation();
+            hidden.delete(el.dataset.id);
+            applyFilters();
+        });
+    });
 }
 
 // ── Slug from video title ──
@@ -765,6 +841,7 @@ function render() {
         tr.dataset.id = ch.id;
         tr.innerHTML = `
           <td class="col-star"><span class="star ${isStarred?'on':''}" data-id="${ch.id}">★</span></td>
+          <td class="col-hide"><span class="hide-btn" data-id="${ch.id}" title="Hide channel">✕</span></td>
           <td class="col-name ch-name" data-id="${ch.id}">
             <a href="${ch.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(ch.name)}</a>
           </td>
@@ -789,7 +866,7 @@ function render() {
         const trDetail = document.createElement('tr');
         trDetail.className = 'detail-row';
         trDetail.dataset.id = ch.id;
-        trDetail.innerHTML = `<td colspan="6"><div class="detail-grid">${gridRows}</div></td>`;
+        trDetail.innerHTML = `<td colspan="7"><div class="detail-grid">${gridRows}</div></td>`;
         tbody.appendChild(trDetail);
     }
 
@@ -816,13 +893,23 @@ function attachEvents() {
     });
 
     // expand/collapse rows
-    document.querySelectorAll('tr.channel-row').forEach(tr => {
+    document.querySelectorAll('#tbody tr.channel-row').forEach(tr => {
         tr.addEventListener('click', e => {
             if (e.target.classList.contains('star')) return;
+            if (e.target.classList.contains('hide-btn')) return;
             if (e.target.tagName === 'A') return;
-            const detail = document.querySelector(`tr.detail-row[data-id="${tr.dataset.id}"]`);
+            const detail = document.querySelector(`#tbody tr.detail-row[data-id="${tr.dataset.id}"]`);
             tr.classList.toggle('expanded');
             detail.classList.toggle('open');
+        });
+    });
+
+    // hide buttons
+    document.querySelectorAll('#tbody .hide-btn').forEach(el => {
+        el.addEventListener('click', e => {
+            e.stopPropagation();
+            hidden.add(el.dataset.id);
+            applyFilters();
         });
     });
 
@@ -892,6 +979,13 @@ document.getElementById('btn-starred').addEventListener('click', () => {
 });
 
 document.getElementById('btn-export').addEventListener('click', exportStarred);
+
+document.getElementById('hidden-tray-row').addEventListener('click', () => {
+    const trayBody = document.getElementById('hidden-tray-body');
+    const isOpen = trayBody.style.display !== 'none';
+    trayBody.style.display = isOpen ? 'none' : '';
+    renderHiddenTray();
+});
 
 render();
 syncHeaderHeight();
