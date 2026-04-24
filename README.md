@@ -38,10 +38,10 @@ tool1_search.py   →   output/YYYYMMDD-HH.MM-<term>.json   (one file per search
       ▼
 tool2_aggregate.py  →  channels.json                       (deduplicated, with provenance)
       │
+      ├──▶ filter-by-matches-count.py  →  filtered.json    (optional: narrow down before tool3)
+      │
       ▼
 tool3_profile.py    →  profiles.json                       (channel stats + recent video activity)
-      │
-      ├──▶ filter.py  →  (stdout / filtered.csv)           (optional: ranked shortlist before report)
       │
       ▼
 tool4_report.py     →  report.html                         (interactive dashboard, open in browser)
@@ -154,22 +154,19 @@ python tool3_profile.py --channels channels.json --videos 100 --out profiles.jso
 
 ---
 
-## filter.py — Ranked shortlist (optional pre-report step)
+## filter-by-matches-count.py — Filter by match relevance (optional)
 
-Reads `profiles.json`, applies numeric filters, and prints a ranked table to stdout. Useful for quickly culling a large channel list before opening the full report, or for piping into a CSV.
+Reads `channels.json` and creates a smaller JSON/CSV of channels that matched at least N search terms. This is highly recommended to save API quota before running `tool3`.
 
 ```bash
-python filter.py --profiles profiles.json --min-terms 2 --min-views 5000 --max-views 200000 --csv filtered.csv
+python filter-by-matches-count.py --input channels.json --min-terms 3 --out high_relevance.json
 ```
 
 **Arguments:**
-- `--profiles` — path to tool3 output
-- `--min-terms` — minimum matched search terms (default: 2)
-- `--min-views` — minimum median view count on recent videos
-- `--max-views` — maximum median view count (filter out giants)
-- `--csv` — optional CSV export path
-
-**Output columns:** Channel name, URL, subscribers, seed terms matched, median views, last post date, about snippet. Sorted by terms matched descending, then median views descending.
+- `--input` — path to tool2 output (default: `channels.json`)
+- `--min-terms` — minimum matched search terms (default: 1)
+- `--out` — optional path to save filtered JSON
+- `--csv` — optional path to save filtered CSV
 
 ---
 
